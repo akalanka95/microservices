@@ -1,0 +1,89 @@
+If you need to send real-time stock data based on different clients' preferences and interests, you can implement a more personalized data distribution system. Here's an approach to achieve this in your Spring Boot application:
+
+Client Identification:
+
+Ensure that each client is uniquely identified. You can use client IDs or some form of authentication to distinguish one client from another.
+Custom Topics:
+
+Instead of broadcasting stock data to all clients, publish stock data to custom topics for each client based on their preferences or interests. For example, you can create separate Kafka topics for different stock markets or specific stock symbols.
+Topic Subscription:
+
+In the frontend application, allow clients to select their preferred stock markets or stocks of interest.
+When a client subscribes to specific markets or stocks, send this information to the server.
+Dynamic Topic Subscription:
+
+On the server side, maintain a mapping of client IDs to their subscribed topics.
+Whenever a client subscribes or unsubscribes from a topic, update this mapping.
+Kafka Message Routing:
+
+Modify your Kafka consumer to subscribe to multiple topics based on the client's preferences. You can dynamically subscribe to the topics associated with each client.
+Message Filtering:
+
+As stock data arrives from Kafka, filter the data based on the topics associated with each client.
+Only send the filtered data to the clients who have subscribed to the relevant topics.
+
+
+@Controller
+public class StockWebSocketController {
+
+    private final List<WebSocketSession> sessions = new CopyOnWriteArrayList<>();
+    private final Map<String, Set<String>> clientSubscriptions = new HashMap<>();
+
+    @MessageMapping("/subscribe")
+    public void subscribeToTopics(@Payload SubscriptionRequest request, WebSocketSession session) {
+        // Store client's subscription preferences
+        String clientId = getClientId(session);
+        Set<String> subscribedTopics = request.getTopics();
+        clientSubscriptions.put(clientId, subscribedTopics);
+
+        // Subscribe the Kafka consumer to the requested topics
+        subscribeKafkaConsumer(clientId, subscribedTopics);
+    }
+
+    @MessageMapping("/unsubscribe")
+    public void unsubscribeFromTopics(@Payload SubscriptionRequest request, WebSocketSession session) {
+        // Remove client's subscription preferences
+        String clientId = getClientId(session);
+        Set<String> unsubscribedTopics = request.getTopics();
+        clientSubscriptions.get(clientId).removeAll(unsubscribedTopics);
+
+        // Unsubscribe the Kafka consumer from the topics if needed
+        unsubscribeKafkaConsumer(clientId, unsubscribedTopics);
+    }
+
+    @EventListener
+    public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
+        WebSocketSession session = event.getSession();
+        String clientId = getClientId(session);
+
+        // Remove the client's subscriptions and update Kafka consumer as needed
+        clientSubscriptions.remove(clientId);
+        unsubscribeKafkaConsumer(clientId, null);
+    }
+
+    // Method to send stock data to clients based on their subscriptions
+    public void sendStockDataToClients(String stockData, String topic) {
+        for (WebSocketSession session : sessions) {
+            String clientId = getClientId(session);
+            if (clientSubscriptions.get(clientId).contains(topic)) {
+                try {
+                    session.sendMessage(new TextMessage(stockData));
+                } catch (IOException e) {
+                    // Handle exceptions when sending messages
+                }
+            }
+        }
+    }
+
+    private String getClientId(WebSocketSession session) {
+        // Implement a method to extract and return a unique client identifier
+    }
+
+    private void subscribeKafkaConsumer(String clientId, Set<String> topics) {
+        // Implement logic to subscribe the Kafka consumer to the specified topics
+    }
+
+    private void unsubscribeKafkaConsumer(String clientId, Set<String> topics) {
+        // Implement logic to unsubscribe the Kafka consumer from the specified topics
+    }
+}

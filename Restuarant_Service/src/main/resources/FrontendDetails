@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stock Updates</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Stock Updates</h1>
+    <ul id="stock-updates"></ul>
+
+    <script>
+        // WebSocket connection
+        var socket = new WebSocket('ws://localhost:8080/ws');
+        var stompClient = Stomp.over(socket);
+
+        // Connect to WebSocket
+        stompClient.connect({}, function () {
+            console.log('Connected to WebSocket');
+
+            // Subscribe to stock updates
+            stompClient.subscribe('/user/topic/stock/12', function (message) {
+                var stockUpdate = JSON.parse(message.body);
+                displayStockUpdate(stockUpdate);
+            });
+
+            // Send a subscription request to the server
+            stompClient.send('/app/subscribe', {}, "12"); // Subscribe to stock with ID 12
+        });
+
+        // Display stock updates in the UI
+        function displayStockUpdate(stockUpdate) {
+            var stockUpdatesList = document.getElementById('stock-updates');
+            var listItem = document.createElement('li');
+            listItem.textContent = 'StockID: ' + stockUpdate.stockID + ', User: ' + stockUpdate.user;
+            stockUpdatesList.appendChild(listItem);
+        }
+    </script>
+</body>
+</html>

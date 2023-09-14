@@ -1,0 +1,56 @@
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Service
+public class SubscriptionManager {
+
+    private final Map<String, Set<String>> subscriptions = new ConcurrentHashMap<>();
+
+    public void subscribe(String stockId, String sessionId) {
+        subscriptions.computeIfAbsent(stockId, key -> ConcurrentHashMap.newKeySet()).add(sessionId);
+    }
+
+    public void unsubscribe(String stockId, String sessionId) {
+        subscriptions.getOrDefault(stockId, ConcurrentHashMap.newKeySet()).remove(sessionId);
+    }
+
+    public Set<String> getSubscribers(String stockId) {
+        return subscriptions.getOrDefault(stockId, Collections.emptySet());
+    }
+}
+
+
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Controller;
+
+@Controller
+public class WebSocketController {
+
+    @Autowired
+    private SubscriptionManager subscriptionManager;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    @MessageMapping("/subscribe")
+    public void subscribeToStock(String stockId, String sessionId) {
+        subscriptionManager.subscribe(stockId, sessionId);
+    }
+
+    @MessageMapping("/unsubscribe")
+    public void unsubscribeFromStock(String stockId, String sessionId) {
+        subscriptionManager.unsubscribe(stockId, sessionId);
+    }
+
+    public void broadcastStockData(String stockId, StockData data) {
+        Set<String> subscribers = subscriptionManager.getSubscribers(stockId);
+        for (String sessionId : subscribers) {
+            messagingTemplate.convertAndSendToUser(sessionId, "/topic/stock/" + stockId, data);
+        }
+    }
+}
